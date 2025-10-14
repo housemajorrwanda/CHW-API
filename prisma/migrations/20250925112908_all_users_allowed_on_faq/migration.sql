@@ -1,0 +1,16 @@
+/*
+  Warnings:
+
+  - You are about to drop the column `studentId` on the `FAQOnSlide` table. All the data in the column will be lost.
+  - Added the required column `userId` to the `FAQOnSlide` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- DropForeignKey
+ALTER TABLE "FAQOnSlide" DROP CONSTRAINT "FAQOnSlide_studentId_fkey";
+
+-- AlterTable
+ALTER TABLE "FAQOnSlide" DROP COLUMN "studentId",
+ADD COLUMN     "userId" TEXT NOT NULL;
+
+-- AddForeignKey
+ALTER TABLE "FAQOnSlide" ADD CONSTRAINT "FAQOnSlide_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
