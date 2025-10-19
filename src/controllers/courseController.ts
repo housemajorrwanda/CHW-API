@@ -74,8 +74,9 @@ export class CourseController {
     @Query() searchq?: string,
     @Query() limit?: number,
     @Query() page?: number,
+    @Query() isPublished?: boolean,
   ) {
-    return CourseService.getCourses(searchq, limit, page);
+    return CourseService.getCourses(searchq, limit, page, isPublished);
   }
 
   @Get("/{id}")

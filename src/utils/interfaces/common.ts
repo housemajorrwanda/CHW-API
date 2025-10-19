@@ -440,6 +440,7 @@ export interface SuperCourseChapterDto {
   lessonDuration?: number;
   isPublished?: boolean;
   slides: SuperCourseSlideDto[];
+  midTestSlide?: SuperCourseSlideDto;
   finalTestSlide?: SuperCourseSlideDto;
 }
 
