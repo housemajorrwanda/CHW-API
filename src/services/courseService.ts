@@ -55,6 +55,7 @@ export class CourseService {
                     questionnaires: {
                       include: {
                         options: true,
+                        answers: true,
                       },
                     },
                   },
@@ -64,6 +65,7 @@ export class CourseService {
                     questionnaires: {
                       include: {
                         options: true,
+                        answers: true,
                       },
                     },
                   },
@@ -76,6 +78,7 @@ export class CourseService {
                 questionnaires: {
                   include: {
                     options: true,
+                    answers: true,
                   },
                 },
               },
@@ -176,6 +179,7 @@ export class CourseService {
                     questionnaires: {
                       include: {
                         options: true,
+                        answers: true,
                       },
                     },
                   },
@@ -185,6 +189,7 @@ export class CourseService {
                     questionnaires: {
                       include: {
                         options: true,
+                        answers: true,
                       },
                     },
                   },
@@ -197,6 +202,7 @@ export class CourseService {
                 questionnaires: {
                   include: {
                     options: true,
+                    answers: true,
                   },
                 },
               },
@@ -251,6 +257,7 @@ export class CourseService {
                     questionnaires: {
                       include: {
                         options: true,
+                        answers: true,
                       },
                     },
                   },
@@ -260,6 +267,7 @@ export class CourseService {
                     questionnaires: {
                       include: {
                         options: true,
+                        answers: true,
                       },
                     },
                   },
@@ -272,6 +280,7 @@ export class CourseService {
                 questionnaires: {
                   include: {
                     options: true,
+                    answers: true,
                   },
                 },
               },
