@@ -159,7 +159,6 @@ export class UserService extends BaseService {
       // Generate OTP and expiry
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
       await prisma.user.update({
         where: { id: userData.id },
         data: { otp, otpExpiresAt },
