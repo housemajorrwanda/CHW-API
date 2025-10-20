@@ -17,6 +17,9 @@ export class FinalTestService {
     const finalTest = await prisma.finalTest.create({
       data: {
         chapterId: data.chapterId,
+        questionToBeAnswered: data.questionToBeAnswered,
+        marksToPass: data.marksToPass,
+        description: data.description,
         isPublished: data.isPublished ?? undefined,
       },
     });
@@ -29,7 +32,17 @@ export class FinalTestService {
   }
 
   public static async getFinalTestById(id: string) {
-    const finalTest = await prisma.finalTest.findUnique({ where: { id } });
+    const finalTest = await prisma.finalTest.findUnique({
+      where: { id },
+      include: {
+        questionnaires: {
+          include: {
+            options: true,
+            answers: true,
+          },
+        },
+      },
+    });
     if (!finalTest) throw new AppError("FinalTest not found", 404);
 
     return {
@@ -55,6 +68,10 @@ export class FinalTestService {
       where: { id },
       data: {
         chapterId: data.chapterId,
+        questionToBeAnswered:
+          data.questionToBeAnswered ?? existing.questionToBeAnswered,
+        marksToPass: data.marksToPass ?? existing.marksToPass,
+        description: data.description ?? existing.description,
         isPublished: data.isPublished ?? existing.isPublished,
       },
     });

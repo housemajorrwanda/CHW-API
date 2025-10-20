@@ -42,7 +42,31 @@ export class ChapterService {
   }
 
   public static async getChapterById(id: string) {
-    const chapter = await prisma.chapter.findUnique({ where: { id } });
+    const chapter = await prisma.chapter.findUnique({
+      where: { id },
+
+      include: {
+        slides: true,
+        midTest: {
+          include: {
+            questionnaires: {
+              include: {
+                options: true,
+              },
+            },
+          },
+        },
+        finalTest: {
+          include: {
+            questionnaires: {
+              include: {
+                options: true,
+              },
+            },
+          },
+        },
+      },
+    });
     if (!chapter) throw new AppError("Chapter not found", 404);
 
     return {

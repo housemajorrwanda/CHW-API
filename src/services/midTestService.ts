@@ -14,6 +14,9 @@ export class MidTestService {
     const midTest = await prisma.midTest.create({
       data: {
         chapterId: data.chapterId,
+        questionToBeAnswered: data.questionToBeAnswered,
+        marksToPass: data.marksToPass,
+        description: data.description,
       },
     });
 
@@ -25,7 +28,17 @@ export class MidTestService {
   }
 
   public static async getMidTestById(id: string) {
-    const midTest = await prisma.midTest.findUnique({ where: { id } });
+    const midTest = await prisma.midTest.findUnique({
+      where: { id },
+      include: {
+        questionnaires: {
+          include: {
+            options: true,
+            answers: true,
+          },
+        },
+      },
+    });
     if (!midTest) throw new AppError("MidTest not found", 404);
 
     return {
@@ -51,6 +64,10 @@ export class MidTestService {
       where: { id },
       data: {
         chapterId: data.chapterId,
+        questionToBeAnswered:
+          data.questionToBeAnswered ?? existing.questionToBeAnswered,
+        marksToPass: data.marksToPass ?? existing.marksToPass,
+        description: data.description ?? existing.description,
       },
     });
 

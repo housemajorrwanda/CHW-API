@@ -21,7 +21,7 @@ export const expressAuthentication = (
 
         const decoded = (await verifyToken(token)) as
           | string
-          | { email: string; id?: string };
+          | { email?: string; id?: string; userRoles?: string[] };
 
         if (typeof decoded === "string") {
           // Old format - token is just the email string
@@ -44,9 +44,9 @@ export const expressAuthentication = (
           resolve(user);
         } else {
           // New format - token is an object
-          if (decoded.email && decoded.id) {
-            // New format - token contains user data
-            const user = await prisma.user.findFirst({
+          if (decoded.id) {
+            // New format - token contains user ID - prioritize ID lookup
+            const user = await prisma.user.findUnique({
               where: { id: decoded.id },
               include: {
                 userRoles: true,
@@ -62,11 +62,10 @@ export const expressAuthentication = (
 
             request.user = user as unknown as TUser;
             resolve(user);
-          } else {
-            // Old format - token contains just email in object form
-            const email = decoded.email;
+          } else if (decoded.email) {
+            // Fallback to email lookup if no ID is present
             const user = await prisma.user.findFirst({
-              where: { email },
+              where: { email: decoded.email },
               include: {
                 userRoles: true,
                 staff: true,
@@ -81,6 +80,9 @@ export const expressAuthentication = (
 
             request.user = user as unknown as TUser;
             resolve(user);
+          } else {
+            reject(new AppError("Invalid token format", 401));
+            return;
           }
         }
       } catch (error) {

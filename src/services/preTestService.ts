@@ -14,6 +14,9 @@ export class PreTestService {
     const preTest = await prisma.preTest.create({
       data: {
         sectionId: data.sectionId,
+        questionToBeAnswered: data.questionToBeAnswered,
+        marksToPass: data.marksToPass,
+        description: data.description,
         isPublished: data.isPublished ?? undefined,
       },
     });
@@ -26,7 +29,17 @@ export class PreTestService {
   }
 
   public static async getPreTestById(id: string) {
-    const preTest = await prisma.preTest.findUnique({ where: { id } });
+    const preTest = await prisma.preTest.findUnique({
+      where: { id },
+      include: {
+        questionnaires: {
+          include: {
+            options: true,
+            answers: true,
+          },
+        },
+      },
+    });
     if (!preTest) throw new AppError("PreTest not found", 404);
 
     return {
@@ -52,6 +65,10 @@ export class PreTestService {
       where: { id },
       data: {
         sectionId: data.sectionId,
+        questionToBeAnswered:
+          data.questionToBeAnswered ?? existing.questionToBeAnswered,
+        marksToPass: data.marksToPass ?? existing.marksToPass,
+        description: data.description ?? existing.description,
         isPublished: data.isPublished ?? existing.isPublished,
       },
     });

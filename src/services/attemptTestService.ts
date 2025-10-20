@@ -15,6 +15,11 @@ function arraysEqualUnordered(a: string[], b: string[]) {
 
 export class AttemptTestService {
   public static async createAttempt(data: CreateAttempTestDto) {
+    // Ensure studentId is provided (should come from controller now)
+    if (!data.studentId) {
+      throw new AppError("Student ID is required", 400);
+    }
+
     // validate student
     const student = await prisma.student.findUnique({
       where: { id: data.studentId },
@@ -60,7 +65,7 @@ export class AttemptTestService {
     const result = await prisma.$transaction(async (tx) => {
       const created = await tx.attempTest.create({
         data: {
-          studentId: data.studentId,
+          studentId: data.studentId!, // Non-null assertion since we validated above
           preTestId: data.preTestId ?? null,
           midTestId: data.midTestId ?? null,
           finalTestId: data.finalTestId ?? null,
@@ -131,9 +136,31 @@ export class AttemptTestService {
           totalQuestions === 0 ? 0 : (correctCount / totalQuestions) * 100;
         const rounded = Math.round(percentage);
 
+        // Get the marksToPass from the respective test
+        let marksToPass = 0;
+        if (created.preTestId) {
+          const preTest = await tx.preTest.findUnique({
+            where: { id: created.preTestId },
+          });
+          marksToPass = preTest?.marksToPass || 0;
+        } else if (created.midTestId) {
+          const midTest = await tx.midTest.findUnique({
+            where: { id: created.midTestId },
+          });
+          marksToPass = midTest?.marksToPass || 0;
+        } else if (created.finalTestId) {
+          const finalTest = await tx.finalTest.findUnique({
+            where: { id: created.finalTestId },
+          });
+          marksToPass = finalTest?.marksToPass || 0;
+        }
+
+        // Mark as completed only if marks meet the threshold
+        const isCompleted = rounded >= marksToPass;
+
         await tx.attempTest.update({
           where: { id: created.id },
-          data: { marks: rounded, isCompleted: true },
+          data: { marks: rounded, isCompleted },
         });
 
         const updatedAttempt = await tx.attempTest.findUnique({
@@ -170,7 +197,7 @@ export class AttemptTestService {
     const existing = await prisma.attempTest.findUnique({ where: { id } });
     if (!existing) throw new AppError("Attempt not found", 404);
 
-    // validate student if changed
+    // validate student if changed (but studentId should typically not be changed in updates)
     if (data.studentId && data.studentId !== existing.studentId) {
       const student = await prisma.student.findUnique({
         where: { id: data.studentId },
@@ -258,9 +285,31 @@ export class AttemptTestService {
         totalQuestions === 0 ? 0 : (correctCount / totalQuestions) * 100;
       const rounded = Math.round(percentage);
 
+      // Get the marksToPass from the respective test
+      let marksToPass = 0;
+      if (existing.preTestId) {
+        const preTest = await prisma.preTest.findUnique({
+          where: { id: existing.preTestId },
+        });
+        marksToPass = preTest?.marksToPass || 0;
+      } else if (existing.midTestId) {
+        const midTest = await prisma.midTest.findUnique({
+          where: { id: existing.midTestId },
+        });
+        marksToPass = midTest?.marksToPass || 0;
+      } else if (existing.finalTestId) {
+        const finalTest = await prisma.finalTest.findUnique({
+          where: { id: existing.finalTestId },
+        });
+        marksToPass = finalTest?.marksToPass || 0;
+      }
+
+      // Mark as completed only if marks meet the threshold
+      const isCompleted = rounded >= marksToPass;
+
       const updatedAttempt = await prisma.attempTest.update({
         where: { id },
-        data: { marks: rounded, isCompleted: true },
+        data: { marks: rounded, isCompleted },
       });
 
       return {

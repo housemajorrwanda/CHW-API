@@ -44,15 +44,46 @@ export class CourseService {
             user: true,
           },
         },
+
         sections: {
           include: {
             chapters: {
               include: {
                 slides: true,
+                midTest: {
+                  include: {
+                    questionnaires: {
+                      include: {
+                        options: true,
+                      },
+                    },
+                  },
+                },
+                finalTest: {
+                  include: {
+                    questionnaires: {
+                      include: {
+                        options: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+
+            preTests: {
+              include: {
+                questionnaires: {
+                  include: {
+                    options: true,
+                  },
+                },
               },
             },
           },
         },
+        intro: true,
+        progresses: true,
       },
     });
     if (!course) throw new AppError("Course not found", 404);
@@ -61,7 +92,7 @@ export class CourseService {
       message: "Course fetched successfully",
       statusCode: 200,
       data: course,
-    } as { message: string; statusCode: number; data: TCourseResponse };
+    };
   }
 
   public static async updateCourse(id: string, data: CreateCourseDto) {
@@ -144,7 +175,6 @@ export class CourseService {
                   include: {
                     questionnaires: {
                       include: {
-                        answers: true,
                         options: true,
                       },
                     },
@@ -154,7 +184,6 @@ export class CourseService {
                   include: {
                     questionnaires: {
                       include: {
-                        answers: true,
                         options: true,
                       },
                     },
@@ -167,7 +196,6 @@ export class CourseService {
               include: {
                 questionnaires: {
                   include: {
-                    answers: true,
                     options: true,
                   },
                 },
@@ -193,7 +221,9 @@ export class CourseService {
   }
 
   public static async getAllCourses(searchq?: string) {
-    const where: Prisma.CourseWhereInput = {};
+    const where: Prisma.CourseWhereInput = {
+      isPublished: true,
+    };
     if (searchq) {
       where.OR = [
         { title: { contains: searchq, mode: "insensitive" } },
@@ -220,7 +250,6 @@ export class CourseService {
                   include: {
                     questionnaires: {
                       include: {
-                        answers: true,
                         options: true,
                       },
                     },
@@ -230,7 +259,6 @@ export class CourseService {
                   include: {
                     questionnaires: {
                       include: {
-                        answers: true,
                         options: true,
                       },
                     },
@@ -243,7 +271,6 @@ export class CourseService {
               include: {
                 questionnaires: {
                   include: {
-                    answers: true,
                     options: true,
                   },
                 },
@@ -276,68 +303,166 @@ export class CourseService {
       throw new AppError("Creator (staff) not found", 404);
     }
     console.log("recieved data:", data);
-    // Use transaction with increased timeout to ensure data consistency
-    const result = await prisma.$transaction(
-      async (tx) => {
-        // 1. Create Course
-        const course = await tx.course.create({
-          data: {
-            creatorId: creatorId,
-            title: data.title,
-            coverIcon: data.coverIcon,
-            description: data.description ?? null,
-            isPublished: data.isPublished ?? true,
-          },
-        });
+    // Use transaction to ensure data consistency
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Course
+      const course = await tx.course.create({
+        data: {
+          creatorId: creatorId,
+          title: data.title,
+          coverIcon: data.coverIcon,
+          description: data.description ?? null,
+          isPublished: data.isPublished ?? true,
+        },
+      });
 
-        // 2. Create Course Intro
-        const courseIntro = await tx.courseIntro.create({
+      // 2. Create Course Intro
+      const courseIntro = await tx.courseIntro.create({
+        data: {
+          courseId: course.id,
+          title: data.courseIntro.title,
+          summary: data.courseIntro.summary,
+          bannerImage: data.courseIntro.bannerImage ?? null,
+          thumbnail: data.courseIntro.thumbnail,
+        },
+      });
+
+      // 3. Create Sections with nested content
+      const sections = [];
+      for (const sectionData of data.sections) {
+        const section = await tx.section.create({
           data: {
             courseId: course.id,
-            title: data.courseIntro.title,
-            summary: data.courseIntro.summary,
-            bannerImage: data.courseIntro.bannerImage ?? null,
-            thumbnail: data.courseIntro.thumbnail,
+            title: sectionData.title,
+            description: sectionData.description ?? null,
           },
         });
 
-        // 3. Create Sections with nested content
-        const sections = [];
-        for (const sectionData of data.sections) {
-          const section = await tx.section.create({
+        // Create PreTest if provided
+        let preTest = null;
+        if (sectionData.preTestSlide?.activity) {
+          preTest = await tx.preTest.create({
             data: {
-              courseId: course.id,
-              title: sectionData.title,
-              description: sectionData.description ?? null,
+              sectionId: section.id,
+              questionToBeAnswered:
+                sectionData.preTestSlide.activity.instruction
+                  .questionToBeAnswered,
+              marksToPass:
+                sectionData.preTestSlide.activity.instruction.marksToPass,
+              description:
+                sectionData.preTestSlide.activity.instruction.description,
+              isPublished: sectionData.preTestSlide.isPublished ?? true,
             },
           });
 
-          // Create PreTest if provided
-          let preTest = null;
-          if (sectionData.preTestSlide?.activity) {
-            preTest = await tx.preTest.create({
+          // Create questionnaires for pretest
+          for (const questionData of sectionData.preTestSlide.activity
+            .questions) {
+            const questionnaire = await tx.questionnaire.create({
               data: {
-                sectionId: section.id,
-                questionToBeAnswered:
-                  sectionData.preTestSlide.activity.instruction
-                    .questionToBeAnswered,
-                marksToPass:
-                  sectionData.preTestSlide.activity.instruction.marksToPass,
-                description:
-                  sectionData.preTestSlide.activity.instruction.description,
-                isPublished: sectionData.preTestSlide.isPublished ?? true,
+                question: questionData.question,
+                questionImage: questionData.questionImage ?? null,
+                allowMultiple: questionData.allowMultiple,
+                preTestId: preTest.id,
               },
             });
 
-            // Create questionnaires for pretest
-            for (const questionData of sectionData.preTestSlide.activity
+            // Create options
+            for (const optionData of questionData.options) {
+              await tx.option.create({
+                data: {
+                  label: optionData.label,
+                  image: optionData.image ?? null,
+                  questionnaireId: questionnaire.id,
+                },
+              });
+            }
+
+            // Create correct answers
+            if (questionData.correctAnswer) {
+              await tx.answer.create({
+                data: {
+                  label: questionData.correctAnswer.label,
+                  image: questionData.correctAnswer.image ?? null,
+                  questionnaireId: questionnaire.id,
+                },
+              });
+            }
+
+            if (
+              questionData.correctAnswers &&
+              questionData.correctAnswers.length > 0
+            ) {
+              for (const correctIndex of questionData.correctAnswers) {
+                const correctOption = questionData.options[correctIndex];
+                if (correctOption) {
+                  await tx.answer.create({
+                    data: {
+                      label: correctOption.label,
+                      image: correctOption.image ?? null,
+                      questionnaireId: questionnaire.id,
+                    },
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        // Create Chapters
+        const chapters: Array<{
+          id: string;
+          sectionId: string;
+          title: string;
+          description: string | null;
+          totalSlide: number;
+          chapterNumber: number;
+          activityAt: number | null;
+          lessonDuration: number;
+          isPublished: boolean;
+          createdAt: Date;
+          updatedAt: Date;
+        }> = [];
+        for (const chapterData of sectionData.chapters) {
+          const chapterNumber =
+            chapterData.chapterNumber ?? chapters.length + 1;
+          const chapter = await tx.chapter.create({
+            data: {
+              sectionId: section.id,
+              title: chapterData.title,
+              description: chapterData.description ?? null,
+              chapterNumber,
+              activityAt: chapterData.activityAt ?? null,
+              lessonDuration: chapterData.lessonDuration ?? 5,
+              isPublished: chapterData.isPublished ?? true,
+            },
+          });
+
+          // Create MidTest if provided
+          let midTest = null;
+          if (chapterData.midTestSlide?.activity) {
+            midTest = await tx.midTest.create({
+              data: {
+                chapterId: chapter.id,
+                questionToBeAnswered:
+                  chapterData.midTestSlide.activity.instruction
+                    .questionToBeAnswered,
+                marksToPass:
+                  chapterData.midTestSlide.activity.instruction.marksToPass,
+                description:
+                  chapterData.midTestSlide.activity.instruction.description,
+              },
+            });
+
+            // Create questionnaires for midtest
+            for (const questionData of chapterData.midTestSlide.activity
               .questions) {
               const questionnaire = await tx.questionnaire.create({
                 data: {
                   question: questionData.question,
                   questionImage: questionData.questionImage ?? null,
                   allowMultiple: questionData.allowMultiple,
-                  preTestId: preTest.id,
+                  midTestId: midTest.id,
                 },
               });
 
@@ -383,221 +508,117 @@ export class CourseService {
             }
           }
 
-          // Create Chapters
-          const chapters: Array<{
-            id: string;
-            sectionId: string;
-            title: string;
-            description: string | null;
-            totalSlide: number;
-            chapterNumber: number;
-            activityAt: number | null;
-            lessonDuration: number;
-            isPublished: boolean;
-            createdAt: Date;
-            updatedAt: Date;
-          }> = [];
-          for (const chapterData of sectionData.chapters) {
-            const chapterNumber =
-              chapterData.chapterNumber ?? chapters.length + 1;
-            const chapter = await tx.chapter.create({
+          // Create FinalTest if provided
+          let finalTest = null;
+          if (chapterData.finalTestSlide?.activity) {
+            finalTest = await tx.finalTest.create({
               data: {
-                sectionId: section.id,
-                title: chapterData.title,
-                description: chapterData.description ?? null,
-                chapterNumber,
-                activityAt: chapterData.activityAt ?? null,
-                lessonDuration: chapterData.lessonDuration ?? 5,
-                isPublished: chapterData.isPublished ?? true,
+                chapterId: chapter.id,
+                questionToBeAnswered:
+                  chapterData.finalTestSlide.activity.instruction
+                    .questionToBeAnswered,
+                marksToPass:
+                  chapterData.finalTestSlide.activity.instruction.marksToPass,
+                description:
+                  chapterData.finalTestSlide.activity.instruction.description,
+                isPublished: chapterData.finalTestSlide.isPublished ?? true,
               },
             });
 
-            // Create MidTest if provided
-            let midTest = null;
-            if (chapterData.midTestSlide?.activity) {
-              midTest = await tx.midTest.create({
+            // Create questionnaires for final test
+            for (const questionData of chapterData.finalTestSlide.activity
+              .questions) {
+              const questionnaire = await tx.questionnaire.create({
                 data: {
-                  chapterId: chapter.id,
-                  questionToBeAnswered:
-                    chapterData.midTestSlide.activity.instruction
-                      .questionToBeAnswered,
-                  marksToPass:
-                    chapterData.midTestSlide.activity.instruction.marksToPass,
-                  description:
-                    chapterData.midTestSlide.activity.instruction.description,
+                  question: questionData.question,
+                  questionImage: questionData.questionImage ?? null,
+                  allowMultiple: questionData.allowMultiple,
+                  finalTestId: finalTest.id,
                 },
               });
 
-              // Create questionnaires for midtest
-              for (const questionData of chapterData.midTestSlide.activity
-                .questions) {
-                const questionnaire = await tx.questionnaire.create({
+              // Create options
+              for (const optionData of questionData.options) {
+                await tx.option.create({
                   data: {
-                    question: questionData.question,
-                    questionImage: questionData.questionImage ?? null,
-                    allowMultiple: questionData.allowMultiple,
-                    midTestId: midTest.id,
+                    label: optionData.label,
+                    image: optionData.image ?? null,
+                    questionnaireId: questionnaire.id,
                   },
                 });
+              }
 
-                // Create options
-                for (const optionData of questionData.options) {
-                  await tx.option.create({
-                    data: {
-                      label: optionData.label,
-                      image: optionData.image ?? null,
-                      questionnaireId: questionnaire.id,
-                    },
-                  });
-                }
+              // Create correct answers
+              if (questionData.correctAnswer) {
+                await tx.answer.create({
+                  data: {
+                    label: questionData.correctAnswer.label,
+                    image: questionData.correctAnswer.image ?? null,
+                    questionnaireId: questionnaire.id,
+                  },
+                });
+              }
 
-                // Create correct answers
-                if (questionData.correctAnswer) {
-                  await tx.answer.create({
-                    data: {
-                      label: questionData.correctAnswer.label,
-                      image: questionData.correctAnswer.image ?? null,
-                      questionnaireId: questionnaire.id,
-                    },
-                  });
-                }
-
-                if (
-                  questionData.correctAnswers &&
-                  questionData.correctAnswers.length > 0
-                ) {
-                  for (const correctIndex of questionData.correctAnswers) {
-                    const correctOption = questionData.options[correctIndex];
-                    if (correctOption) {
-                      await tx.answer.create({
-                        data: {
-                          label: correctOption.label,
-                          image: correctOption.image ?? null,
-                          questionnaireId: questionnaire.id,
-                        },
-                      });
-                    }
+              if (
+                questionData.correctAnswers &&
+                questionData.correctAnswers.length > 0
+              ) {
+                for (const correctIndex of questionData.correctAnswers) {
+                  const correctOption = questionData.options[correctIndex];
+                  if (correctOption) {
+                    await tx.answer.create({
+                      data: {
+                        label: correctOption.label,
+                        image: correctOption.image ?? null,
+                        questionnaireId: questionnaire.id,
+                      },
+                    });
                   }
                 }
               }
             }
-
-            // Create FinalTest if provided
-            let finalTest = null;
-            if (chapterData.finalTestSlide?.activity) {
-              finalTest = await tx.finalTest.create({
-                data: {
-                  chapterId: chapter.id,
-                  questionToBeAnswered:
-                    chapterData.finalTestSlide.activity.instruction
-                      .questionToBeAnswered,
-                  marksToPass:
-                    chapterData.finalTestSlide.activity.instruction.marksToPass,
-                  description:
-                    chapterData.finalTestSlide.activity.instruction.description,
-                  isPublished: chapterData.finalTestSlide.isPublished ?? true,
-                },
-              });
-
-              // Create questionnaires for final test
-              for (const questionData of chapterData.finalTestSlide.activity
-                .questions) {
-                const questionnaire = await tx.questionnaire.create({
-                  data: {
-                    question: questionData.question,
-                    questionImage: questionData.questionImage ?? null,
-                    allowMultiple: questionData.allowMultiple,
-                    finalTestId: finalTest.id,
-                  },
-                });
-
-                // Create options
-                for (const optionData of questionData.options) {
-                  await tx.option.create({
-                    data: {
-                      label: optionData.label,
-                      image: optionData.image ?? null,
-                      questionnaireId: questionnaire.id,
-                    },
-                  });
-                }
-
-                // Create correct answers
-                if (questionData.correctAnswer) {
-                  await tx.answer.create({
-                    data: {
-                      label: questionData.correctAnswer.label,
-                      image: questionData.correctAnswer.image ?? null,
-                      questionnaireId: questionnaire.id,
-                    },
-                  });
-                }
-
-                if (
-                  questionData.correctAnswers &&
-                  questionData.correctAnswers.length > 0
-                ) {
-                  for (const correctIndex of questionData.correctAnswers) {
-                    const correctOption = questionData.options[correctIndex];
-                    if (correctOption) {
-                      await tx.answer.create({
-                        data: {
-                          label: correctOption.label,
-                          image: correctOption.image ?? null,
-                          questionnaireId: questionnaire.id,
-                        },
-                      });
-                    }
-                  }
-                }
-              }
-            }
-
-            // Create Slides
-            const slides = [];
-            for (const slideData of chapterData.slides) {
-              const slide = await tx.slide.create({
-                data: {
-                  chapterId: chapter.id,
-                  note: slideData.note ?? null,
-                  description: slideData.description ?? null,
-                  slideNumber: slideData.slideNumber,
-                  file: slideData.file ?? null,
-                  isPublished: slideData.isPublished ?? true,
-                },
-              });
-              slides.push(slide);
-            }
-
-            // Update chapter totalSlide
-            await tx.chapter.update({
-              where: { id: chapter.id },
-              data: { totalSlide: slides.length },
-            });
-
-            chapters.push(chapter);
           }
 
-          // Update section totalChapter
-          await tx.section.update({
-            where: { id: section.id },
-            data: { totalChapter: chapters.length },
+          // Create Slides
+          const slides = [];
+          for (const slideData of chapterData.slides) {
+            const slide = await tx.slide.create({
+              data: {
+                chapterId: chapter.id,
+                note: slideData.note ?? null,
+                description: slideData.description ?? null,
+                slideNumber: slideData.slideNumber,
+                file: slideData.file ?? null,
+                isPublished: slideData.isPublished ?? true,
+              },
+            });
+            slides.push(slide);
+          }
+
+          // Update chapter totalSlide
+          await tx.chapter.update({
+            where: { id: chapter.id },
+            data: { totalSlide: slides.length },
           });
 
-          sections.push(section);
+          chapters.push(chapter);
         }
 
-        return {
-          course,
-          courseIntro,
-          sections,
-        };
-      },
-      {
-        timeout: this.TRANSACTION_TIMEOUT,
-        maxWait: this.MAX_WAIT,
-      },
-    );
+        // Update section totalChapter
+        await tx.section.update({
+          where: { id: section.id },
+          data: { totalChapter: chapters.length },
+        });
+
+        sections.push(section);
+      }
+
+      return {
+        course,
+        courseIntro,
+        sections,
+      };
+    });
 
     return {
       message: "Super course created successfully",

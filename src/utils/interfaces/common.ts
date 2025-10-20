@@ -477,7 +477,7 @@ export interface CreateAttempTestDto {
   midTestId?: string | null;
   finalTestId?: string | null;
   tryCount?: number;
-  studentId: string;
+  studentId?: string;
   questionAnswers?: Array<{
     questionnaireId: string;
     selectedAnswerIds: string[];
@@ -556,6 +556,48 @@ export interface TSlideProgressResponse {
   isCompleted: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Student Statistics
+export interface StudentCourseStatistics {
+  courseId: string;
+  title: string;
+  coverIcon: string;
+  description?: string | null;
+  totalChapters: number;
+  totalTests: number;
+  completedTests: number;
+  courseDuration: number;
+  isEnrolled: boolean;
+  isStarted: boolean;
+  isCompleted: boolean;
+  enrollmentDate: Date | null;
+  progress: number;
+  createdAt: Date;
+}
+
+export interface StudentStatisticsSummary {
+  totalCourses: number;
+  enrolledCourses: number;
+  unenrolledCourses: number;
+  completedCourses: number;
+  startedCourses: number;
+}
+
+export interface TStudentStatisticsResponse {
+  summary: StudentStatisticsSummary;
+  courses: StudentCourseStatistics[];
+  lastViewedLocation?: {
+    courseId: string;
+    courseTitle: string;
+    sectionId: string;
+    sectionTitle: string;
+    chapterId: string;
+    chapterTitle: string;
+    chapterNumber: number;
+    slideId: string;
+    lastViewedAt: Date;
+  } | null;
 }
 
 // Slide-related
