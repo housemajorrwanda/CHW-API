@@ -132,7 +132,194 @@ export class CourseService {
     const existing = await prisma.course.findUnique({ where: { id } });
     if (!existing) throw new AppError("Course not found", 404);
 
-    await prisma.course.delete({ where: { id } });
+    // Use transaction to ensure data consistency during deletion
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete all course-related progress records
+      await tx.courseProgress.deleteMany({
+        where: { courseId: id },
+      });
+
+      // 2. Get all sections for this course
+      const sections = await tx.section.findMany({
+        where: { courseId: id },
+        include: {
+          chapters: {
+            include: {
+              slides: true,
+              midTest: {
+                include: {
+                  questionnaires: {
+                    include: {
+                      options: true,
+                      answers: true,
+                      attemptAnswers: true,
+                    },
+                  },
+                  attempts: true,
+                },
+              },
+              finalTest: {
+                include: {
+                  questionnaires: {
+                    include: {
+                      options: true,
+                      answers: true,
+                      attemptAnswers: true,
+                    },
+                  },
+                  attempts: true,
+                },
+              },
+            },
+          },
+          preTests: {
+            include: {
+              questionnaires: {
+                include: {
+                  options: true,
+                  answers: true,
+                  attemptAnswers: true,
+                },
+              },
+              attempts: true,
+            },
+          },
+        },
+      });
+
+      // 3. Delete all nested records for each section
+      for (const section of sections) {
+        // Delete preTest related data
+        for (const preTest of section.preTests) {
+          for (const questionnaire of preTest.questionnaires) {
+            // Delete attempt answers
+            await tx.attemptAnswer.deleteMany({
+              where: { questionnaireId: questionnaire.id },
+            });
+            // Delete options and answers (these have onDelete: Cascade in schema)
+            await tx.option.deleteMany({
+              where: { questionnaireId: questionnaire.id },
+            });
+            await tx.answer.deleteMany({
+              where: { questionnaireId: questionnaire.id },
+            });
+          }
+          // Delete questionnaires
+          await tx.questionnaire.deleteMany({
+            where: { preTestId: preTest.id },
+          });
+          // Delete attempts
+          await tx.attempTest.deleteMany({
+            where: { preTestId: preTest.id },
+          });
+        }
+        // Delete preTests
+        await tx.preTest.deleteMany({
+          where: { sectionId: section.id },
+        });
+
+        // Delete chapter related data
+        for (const chapter of section.chapters) {
+          // Delete chapter progress
+          await tx.chapterProgress.deleteMany({
+            where: { chapterId: chapter.id },
+          });
+
+          // Delete documents on slides
+          await tx.documentOnSlide.deleteMany({
+            where: { chapterId: chapter.id },
+          });
+
+          // Delete slide related data
+          for (const slide of chapter.slides) {
+            // Delete FAQs on slides
+            await tx.fAQOnSlide.deleteMany({
+              where: { slideId: slide.id },
+            });
+            // Delete student on slides
+            await tx.studentOnSlide.deleteMany({
+              where: { slideId: slide.id },
+            });
+            // Delete slide progress
+            await tx.slideProgress.deleteMany({
+              where: { slideId: slide.id },
+            });
+          }
+          // Delete slides
+          await tx.slide.deleteMany({
+            where: { chapterId: chapter.id },
+          });
+
+          // Delete midTest related data
+          if (chapter.midTest) {
+            for (const questionnaire of chapter.midTest.questionnaires) {
+              await tx.attemptAnswer.deleteMany({
+                where: { questionnaireId: questionnaire.id },
+              });
+              await tx.option.deleteMany({
+                where: { questionnaireId: questionnaire.id },
+              });
+              await tx.answer.deleteMany({
+                where: { questionnaireId: questionnaire.id },
+              });
+            }
+            await tx.questionnaire.deleteMany({
+              where: { midTestId: chapter.midTest.id },
+            });
+            await tx.attempTest.deleteMany({
+              where: { midTestId: chapter.midTest.id },
+            });
+            await tx.midTest.delete({
+              where: { id: chapter.midTest.id },
+            });
+          }
+
+          // Delete finalTest related data
+          if (chapter.finalTest) {
+            for (const questionnaire of chapter.finalTest.questionnaires) {
+              await tx.attemptAnswer.deleteMany({
+                where: { questionnaireId: questionnaire.id },
+              });
+              await tx.option.deleteMany({
+                where: { questionnaireId: questionnaire.id },
+              });
+              await tx.answer.deleteMany({
+                where: { questionnaireId: questionnaire.id },
+              });
+            }
+            await tx.questionnaire.deleteMany({
+              where: { finalTestId: chapter.finalTest.id },
+            });
+            await tx.attempTest.deleteMany({
+              where: { finalTestId: chapter.finalTest.id },
+            });
+            await tx.finalTest.delete({
+              where: { id: chapter.finalTest.id },
+            });
+          }
+        }
+
+        // Delete chapters
+        await tx.chapter.deleteMany({
+          where: { sectionId: section.id },
+        });
+      }
+
+      // 4. Delete sections
+      await tx.section.deleteMany({
+        where: { courseId: id },
+      });
+
+      // 5. Delete course intro
+      await tx.courseIntro.deleteMany({
+        where: { courseId: id },
+      });
+
+      // 6. Finally delete the course
+      await tx.course.delete({
+        where: { id },
+      });
+    });
 
     return { message: "Course deleted successfully", statusCode: 200 };
   }

