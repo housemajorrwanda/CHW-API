@@ -186,4 +186,11 @@ export class UserController {
   public async deleteAvatar(@Request() req: ExpressRequest) {
     return UserService.deleteAvatar(req);
   }
+
+  @Get("/validate-token")
+  @Security("jwt")
+  @Middlewares(loggerMiddleware)
+  public validateToken(@Request() req: ExpressRequest) {
+    return UserService.validateToken(req);
+  }
 }

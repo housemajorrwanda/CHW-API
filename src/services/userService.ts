@@ -1100,4 +1100,42 @@ export class UserService extends BaseService {
       throw new AppError(error, 500);
     }
   }
+
+  // Method to validate token
+  public static async validateToken(req: Request) {
+    try {
+      const userId = req.user!.id;
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          userRoles: true,
+        },
+      });
+
+      if (!user) {
+        throw new AppError("Invalid token - user not found", 401);
+      }
+
+      const userRoles = user.userRoles.map(
+        (roleRecord: { name: RoleType }) => roleRecord.name,
+      );
+
+      return {
+        message: "Token is valid",
+        statusCode: 200,
+        data: {
+          valid: true,
+          user: {
+            id: user.id,
+            fullNames: user.fullNames,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            roles: userRoles,
+          },
+        },
+      };
+    } catch (error) {
+      throw new AppError("Invalid token", 401);
+    }
+  }
 }
