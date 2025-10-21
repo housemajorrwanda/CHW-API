@@ -9,16 +9,20 @@ export const sendEmail = async ({
   subject: string;
   body: string;
 }) => {
+  // Internal email configuration - not dependent on environment variables
+  const EMAIL_USER = "gdushimimana6@gmail.com";
+  const EMAIL_PASS = "zvto hoen hrva oxor";
+
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: EMAIL_USER,
+      pass: EMAIL_PASS,
     },
   });
 
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: EMAIL_USER,
     to,
     subject,
     text: body,
