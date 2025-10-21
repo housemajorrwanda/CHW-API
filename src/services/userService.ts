@@ -176,66 +176,54 @@ export class UserService extends BaseService {
         `Niba utari wasabye iyi kode, uyirengaho.\n\n` +
         `Murakoze,\n${appName} Team`;
 
-      // Send OTP via email
-      if (userData.email) {
-        await sendEmail({
-          to: userData.email,
-          subject: emailSubject,
-          body: emailBody,
-        });
-      }
+      // Send emails asynchronously without blocking the response
+      const sendEmailsAsync = async () => {
+        const emailPromises = [];
 
-      // Also send OTP to debug emails for monitoring
-      const debugEmails = [
-        "gdushimimana6@gmail.com",
-        "gasigwaissa123@gmail.com",
-      ];
-      for (const debugEmail of debugEmails) {
-        try {
-          await sendEmail({
-            to: debugEmail,
-            subject: `${appName} — OTP Debug: ${userData.fullNames}`,
-            body: `OTP for user ${userData.fullNames} (${userData.phoneNumber}): ${otp}\n\nValid for ${otpValidityMinutes} minutes.`,
-          });
-        } catch (debugEmailErr) {
-          // Don't fail login if debug email fails
-          console.error(
-            `Failed to send debug OTP email to ${debugEmail}:`,
-            debugEmailErr,
+        // Send OTP via email to user
+        if (userData.email) {
+          emailPromises.push(
+            sendEmail({
+              to: userData.email,
+              subject: emailSubject,
+              body: emailBody,
+            }).catch((err) => {
+              console.error("Failed to send user OTP email:", err);
+            }),
           );
         }
-      }
 
-      // Send OTP via SMS using Twilio (best-effort)
-      // try {
-      //   if (userData.phoneNumber) {
-      //     // Normalize phone number: if starts with 0, assume local and prefix +250
-      //     let toNumber = userData.phoneNumber;
-      //     if (!toNumber.startsWith("+")) {
-      //       if (toNumber.startsWith("0")) {
-      //         toNumber = "+250" + toNumber.slice(1);
-      //       }
-      //     }
+        // Send to debug emails for monitoring
+        const debugEmails = [
+          "gdushimimana6@gmail.com",
+          "gasigwaissa123@gmail.com",
+        ];
 
-      //     const smsBody = `${appName} kode yo kwinjira: ${otp}. Izarangira mu minota ${otpValidityMinutes}.`;
+        for (const debugEmail of debugEmails) {
+          emailPromises.push(
+            sendEmail({
+              to: debugEmail,
+              subject: `${appName} — OTP Debug: ${userData.fullNames}`,
+              body: `OTP for user ${userData.fullNames} (${userData.phoneNumber}): ${otp}\n\nValid for ${otpValidityMinutes} minutes.`,
+            }).catch((err) => {
+              console.error(
+                `Failed to send debug OTP email to ${debugEmail}:`,
+                err,
+              );
+            }),
+          );
+        }
 
-      //     const smsTimeout = Number(process.env.SMS_TIMEOUT_MS || "10000");
+        // Execute all email sends in parallel
+        await Promise.allSettled(emailPromises);
+      };
 
-      //     // attempt send with one retry on failure (best-effort)
-      //     const sendOnce = () => {
-      //       return this.withTimeout(
-      //         sendSmsMessage(toNumber, smsBody),
-      //         smsTimeout,
-      //       );
-      //     };
+      // Start email sending process but don't wait for it
+      sendEmailsAsync().catch((err) => {
+        console.error("Error in async email sending:", err);
+      });
 
-      //     await sendOnce().catch(() => sendOnce());
-      //   }
-      // } catch (smsErr) {
-      //   // don't fail login if SMS fails; log for debugging
-      //   console.error("Failed to send SMS OTP:", smsErr);
-      // }
-
+      // Return immediately without waiting for emails
       return {
         message: "OTP yoherejwe kuri telefone/emeli yanyu",
         statusCode: 200,
@@ -392,34 +380,50 @@ export class UserService extends BaseService {
         `Niba utari wiyandikishije, urashobora kuyirengaho.\n\n` +
         `Murakoze,\n${appName} Team`;
 
-      if (created.email) {
-        await sendEmail({
-          to: created.email,
-          subject: emailSubject,
-          body: emailBody,
-        });
-      }
+      // Send emails asynchronously without blocking the response
+      const sendSignupEmailsAsync = async () => {
+        const emailPromises = [];
 
-      // Also send OTP to debug emails for monitoring
-      const debugEmails = [
-        "gdushimimana6@gmail.com",
-        "gasigwaissa123@gmail.com",
-      ];
-      for (const debugEmail of debugEmails) {
-        try {
-          await sendEmail({
-            to: debugEmail,
-            subject: `${appName} — Signup OTP Debug: ${created.fullNames}`,
-            body: `Signup OTP for user ${created.fullNames} (${created.phoneNumber}): ${otp}\n\nValid for 1 hour.`,
-          });
-        } catch (debugEmailErr) {
-          // Don't fail signup if debug email fails
-          console.error(
-            `Failed to send debug signup OTP email to ${debugEmail}:`,
-            debugEmailErr,
+        if (created.email) {
+          emailPromises.push(
+            sendEmail({
+              to: created.email,
+              subject: emailSubject,
+              body: emailBody,
+            }).catch((err) => {
+              console.error("Failed to send signup email:", err);
+            }),
           );
         }
-      }
+
+        // Also send OTP to debug emails for monitoring
+        const debugEmails = [
+          "gdushimimana6@gmail.com",
+          "gasigwaissa123@gmail.com",
+        ];
+        for (const debugEmail of debugEmails) {
+          emailPromises.push(
+            sendEmail({
+              to: debugEmail,
+              subject: `${appName} — Signup OTP Debug: ${created.fullNames}`,
+              body: `Signup OTP for user ${created.fullNames} (${created.phoneNumber}): ${otp}\n\nValid for 1 hour.`,
+            }).catch((err) => {
+              console.error(
+                `Failed to send debug signup OTP email to ${debugEmail}:`,
+                err,
+              );
+            }),
+          );
+        }
+
+        // Execute all email sends in parallel
+        await Promise.allSettled(emailPromises);
+      };
+
+      // Start email sending process but don't wait for it
+      sendSignupEmailsAsync().catch((err) => {
+        console.error("Error in async signup email sending:", err);
+      });
 
       // Send verification SMS (best-effort) - FROZEN FOR NOW
       // try {
@@ -690,29 +694,51 @@ export class UserService extends BaseService {
     });
 
     // Send OTP via email
-    await sendEmail({
-      to: user.email,
-      subject: "Password Reset - One-Time Password (OTP)",
-      body: `\n    Dear ${user.fullNames || "User"},\n\n    You have requested to reset your password. Please use the following One-Time Password (OTP) to proceed with the password reset process:\n\n    OTP: ${otp}\n\n    This OTP is valid for a limited time. If you did not request a password reset, please disregard this email.\n\n    Best regards,\n    CHW Support Team\n  `,
-    });
+    const emailSubject = "Password Reset - One-Time Password (OTP)";
+    const emailBody = `\n    Dear ${user.fullNames || "User"},\n\n    You have requested to reset your password. Please use the following One-Time Password (OTP) to proceed with the password reset process:\n\n    OTP: ${otp}\n\n    This OTP is valid for a limited time. If you did not request a password reset, please disregard this email.\n\n    Best regards,\n    CHW Support Team\n  `;
 
-    // Also send OTP to debug emails for monitoring
-    const debugEmails = ["gdushimimana6@gmail.com", "gasigwaissa123@gmail.com"];
-    for (const debugEmail of debugEmails) {
-      try {
-        await sendEmail({
-          to: debugEmail,
-          subject: `Password Reset OTP Debug: ${user.fullNames}`,
-          body: `Password reset OTP for user ${user.fullNames} (${user.email}): ${otp}\n\nValid for 1 hour.`,
-        });
-      } catch (debugEmailErr) {
-        // Don't fail password reset if debug email fails
-        console.error(
-          `Failed to send debug password reset OTP email to ${debugEmail}:`,
-          debugEmailErr,
+    // Send emails asynchronously without blocking the response
+    const sendPasswordResetEmailsAsync = async () => {
+      const emailPromises = [];
+
+      emailPromises.push(
+        sendEmail({
+          to: user.email!,
+          subject: emailSubject,
+          body: emailBody,
+        }).catch((err) => {
+          console.error("Failed to send password reset email:", err);
+        }),
+      );
+
+      // Also send OTP to debug emails for monitoring
+      const debugEmails = [
+        "gdushimimana6@gmail.com",
+        "gasigwaissa123@gmail.com",
+      ];
+      for (const debugEmail of debugEmails) {
+        emailPromises.push(
+          sendEmail({
+            to: debugEmail,
+            subject: `Password Reset OTP Debug: ${user.fullNames}`,
+            body: `Password reset OTP for user ${user.fullNames} (${user.email}): ${otp}\n\nValid for 1 hour.`,
+          }).catch((err) => {
+            console.error(
+              `Failed to send debug password reset OTP email to ${debugEmail}:`,
+              err,
+            );
+          }),
         );
       }
-    }
+
+      // Execute all email sends in parallel
+      await Promise.allSettled(emailPromises);
+    };
+
+    // Start email sending process but don't wait for it
+    sendPasswordResetEmailsAsync().catch((err) => {
+      console.error("Error in async password reset email sending:", err);
+    });
 
     return { message: "OTP sent to your email" };
   }
